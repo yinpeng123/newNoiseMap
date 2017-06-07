@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">NoiseMap</string>
+    <string name="general_consulting">测量</string>
+
+    <string name="title_activity_noise_measure">NoiseMeasure</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <string name="title_activity_noise_action">NoiseAction</string>
+    <string name="title_activity_main2">Main2Activity</string>
+</resources>
