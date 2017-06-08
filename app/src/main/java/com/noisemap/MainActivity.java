@@ -12,6 +12,7 @@ import android.util.Log;
 import android.content.pm.PackageManager;
 import android.annotation.TargetApi;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -33,6 +34,7 @@ import com.baidu.mapapi.map.BitmapDescriptorFactory;
 import com.baidu.mapapi.map.MapStatusUpdate;
 import com.baidu.mapapi.map.MapStatusUpdateFactory;
 import com.baidu.mapapi.map.MapView;
+import com.baidu.mapapi.map.Marker;
 import com.baidu.mapapi.map.MarkerOptions;
 import com.baidu.mapapi.map.OverlayOptions;
 import com.baidu.mapapi.model.LatLng;
@@ -111,7 +113,7 @@ public class MainActivity extends Activity implements CloudListener{
                         info.tags = "";
 
                         //检索关键字，可选。最长45个字符。
-                        info.q = "武汉";
+                        info.q = "";
 
                         //检索区域名称，必选。市或区的名字，如北京市，海淀区。最长25个字符。
                         info.region = "武汉市";
@@ -125,6 +127,16 @@ public class MainActivity extends Activity implements CloudListener{
 
                     }
                 });
+        mBaiduMap.setOnMarkerClickListener(new BaiduMap.OnMarkerClickListener() {
+            @Override
+            public boolean onMarkerClick(Marker marker) {
+                //从marker中获取info信息
+                Bundle bundle = marker.getExtraInfo();
+                CLoc info = (CLoc) bundle.getSerializable("info");
+                mres.setText("地址："+info.getAddress()+"\n"+"分贝："+Integer.valueOf(info.getnoise())+"db");
+                return true;
+            }
+        });
     }
 
     private void initLocation() {
@@ -225,17 +237,20 @@ public class MainActivity extends Activity implements CloudListener{
             //清空地图所有的 Overlay 覆盖物以及 InfoWindow
             mBaiduMap.clear();
 
+
             /**
              * public static BitmapDescriptor fromResource(int resourceId)
              * 根据资源 Id 创建 bitmap 描述信息
              * */
             BitmapDescriptor bd = BitmapDescriptorFactory.fromResource(R.drawable.icon_gcoding);
 
+            Marker marker;
             LatLng ll;
             LatLngBounds.Builder builder = new LatLngBounds.Builder();
-
+            int noise;
             for (CloudPoiInfo info : result.poiList) {
                 ll = new LatLng(info.latitude, info.longitude);
+                noise=(int)info.extras.get("noise");
                 /**
                  * OverlayOptions:地图覆盖物选型基类
                  *
@@ -250,14 +265,25 @@ public class MainActivity extends Activity implements CloudListener{
                  * @param position - marker 覆盖物的位置坐标
                  * @param 该 Marker 选项对象
                  * */
-                OverlayOptions oo = new MarkerOptions()
-                        .icon(bd)
-                        .position(ll);
+                CLoc cLoc=new CLoc();
+                cLoc.setAddress(info.address);
+                cLoc.setName(info.direction);
+                cLoc.setDb(noise);
+
+                 OverlayOptions oo = new MarkerOptions().icon(bd).position(ll);
+
                 /**
                  * addOverlay(OverlayOptions options):
                  * 向地图添加一个 Overlay
                  * */
-                mBaiduMap.addOverlay(oo);
+                //mBaiduMap.addOverlay(oo);
+                //添加marker
+                marker = (Marker) mBaiduMap.addOverlay(oo);
+                //使用marker携带info信息，当点击事件的时候可以通过marker获得info信息
+                Bundle bundle = new Bundle();
+                //info必须实现序列化接口
+                bundle.putSerializable("info", cLoc);
+                marker.setExtraInfo(bundle);
 
                 /**
                  * public LatLngBounds.Builder include(LatLng point)
@@ -286,6 +312,7 @@ public class MainActivity extends Activity implements CloudListener{
             mBaiduMap.animateMapStatus(u);
         }
     }
+
 
 
     @Override

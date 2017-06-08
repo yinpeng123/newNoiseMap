@@ -15,7 +15,7 @@ public class CLoc implements Serializable{
     private double longitude;
     private int coord_type;
 
-    private int db;
+    private int noise;
 
     private static final long serialVersionUID=1L;
 
@@ -90,12 +90,12 @@ public class CLoc implements Serializable{
         this.coord_type = coord_type;
     }
 
-    public int getDb() {
-        return db;
+    public int getnoise() {
+        return noise;
     }
 
-    public void setDb(int db) {
-        this.db = db;
+    public void setDb(int noise) {
+        this.noise = noise;
     }
 
 
