@@ -6,25 +6,36 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     tools:context="com.noisemap.NoiseMeasure">
+
     <TextView
         android:id="@+id/soundplate"
-        android:text="@string/app_name"
+        android:text="NoiseDb"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:textSize="50sp"
         />
   <Button
-      android:id="@+id/start"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:text="START"
+      android:onClick="stop"
+      android:text="STOP"
       android:layout_gravity="center_horizontal"
       />
+
     <TextView
         android:id="@+id/res"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_horizontal"/>
+
+    <Button
+        android:id="@+id/sub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:enabled="false"
+        android:onClick="sub"
+        android:text="上传数据" />
 
 </LinearLayout>

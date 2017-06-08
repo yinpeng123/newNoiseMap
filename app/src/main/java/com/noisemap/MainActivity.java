@@ -1,19 +1,17 @@
 package com.noisemap;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
-import android.support.v7.app.AppCompatActivity;
+import android.location.Location;
 import android.os.Bundle;
 import android.os.Build;
 import android.util.Log;
 import android.content.pm.PackageManager;
 import android.annotation.TargetApi;
 import android.view.View;
-import android.widget.Button;
-import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -21,8 +19,14 @@ import com.baidu.location.BDLocation;
 import com.baidu.location.BDLocationListener;
 import com.baidu.location.LocationClient;
 import com.baidu.location.LocationClientOption;
-import com.baidu.location.Poi;
 import com.baidu.mapapi.SDKInitializer;
+import com.baidu.mapapi.cloud.CloudListener;
+import com.baidu.mapapi.cloud.CloudManager;
+import com.baidu.mapapi.cloud.CloudPoiInfo;
+import com.baidu.mapapi.cloud.CloudRgcResult;
+import com.baidu.mapapi.cloud.CloudSearchResult;
+import com.baidu.mapapi.cloud.DetailSearchResult;
+import com.baidu.mapapi.cloud.LocalSearchInfo;
 import com.baidu.mapapi.map.BaiduMap;
 import com.baidu.mapapi.map.BitmapDescriptor;
 import com.baidu.mapapi.map.BitmapDescriptorFactory;
@@ -32,18 +36,22 @@ import com.baidu.mapapi.map.MapView;
 import com.baidu.mapapi.map.MarkerOptions;
 import com.baidu.mapapi.map.OverlayOptions;
 import com.baidu.mapapi.model.LatLng;
+import com.baidu.mapapi.model.LatLngBounds;
 
-import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity implements CloudListener{
 
     private final int SDK_PERMISSION_REQUEST = 127;
     private static final String TAG = "MainActivity";
+    static CLoc cLoc;
     private MapView mMapView;
     private BaiduMap mBaiduMap;
     private String permissionInfo;
     private TextView mres;
-    CPoi poi;
+
+    private static final String LTAG = MainActivity.class.getSimpleName();
+
+    public Location location;
     //定位
     public LocationClient mLocationClient = null;
     public BDLocationListener myListener = new MyLocationListener();
@@ -57,10 +65,13 @@ public class MainActivity extends AppCompatActivity {
         getPersimmions();
         //初始化控件
         initView();
+        Log.i("y", "onCreate");
+
     }
 
 
     private void initView() {
+        cLoc=new CLoc();
         mMapView = (MapView) findViewById(R.id.bmapView);
         mres=(TextView)findViewById(R.id.mres);
         mBaiduMap = mMapView.getMap();
@@ -72,6 +83,48 @@ public class MainActivity extends AppCompatActivity {
         initLocation();
         //开启定位
         mLocationClient.start();
+
+        /**
+         * CloudManager:LBS云检索管理类
+         * getInstance():获取唯一可用实例
+         * init(CloudListener listener):初始化
+         * 需要实现CloudListener接口的onGetDetailSearchResult和onGetSearchResult方法
+         * */
+        CloudManager.getInstance().init(MainActivity.this);
+        //本地搜索
+        findViewById(R.id.regionSearch).setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        /**
+                         * LocalSearchInfo:设置云检索中本地检索的参数，继承自 BaseCloudSearchInfo
+                         * */
+                        LocalSearchInfo info = new LocalSearchInfo();
+
+                        //access_key（必须），最大长度50
+                        info.ak = "AXI0cm3LRMgxmkDOm3LjvjSuxSp20jg0";
+
+                        //geo table 表主键（必须）
+                        info.geoTableId = 169399;
+
+                        //标签，可选，空格分隔的多字符串，最长45个字符，样例：美食 小吃
+                        info.tags = "";
+
+                        //检索关键字，可选。最长45个字符。
+                        info.q = "武汉";
+
+                        //检索区域名称，必选。市或区的名字，如北京市，海淀区。最长25个字符。
+                        info.region = "武汉市";
+
+                        /**
+                         * localSearch(LocalSearchInfo info)
+                         * 区域检索，如果所有参数都合法，返回true，否则返回 fasle，
+                         * 检索的结果在 CloudListener 中的 onGetSearchResult() 函数中。
+                         * */
+                        CloudManager.getInstance().localSearch(info);
+
+                    }
+                });
     }
 
     private void initLocation() {
@@ -87,8 +140,6 @@ public class MainActivity extends AppCompatActivity {
         option.setIsNeedAddress(true);
         //可选，默认false,设置是否使用gps
         option.setOpenGps(true);
-        //可选，默认false，设置是否当GPS有效时按照1S/1次频率输出GPS结果
-        option.setLocationNotify(true);
         //可选，默认false，设置是否需要位置语义化结果，可以在BDLocation.getLocationDescribe里得到，结果类似于“在北京天安门附近”
         option.setIsNeedLocationDescribe(true);
         //可选，默认false，设置是否需要POI结果，可以在BDLocation.getPoiList里得到
@@ -97,8 +148,6 @@ public class MainActivity extends AppCompatActivity {
         option.setIgnoreKillProcess(false);
         //可选，默认false，设置是否收集CRASH信息，默认收集
         option.SetIgnoreCacheException(false);
-        //可选，默认false，设置是否需要过滤GPS仿真结果，默认需要
-        option.setEnableSimulateGps(false);
         mLocationClient.setLocOption(option);
     }
 
@@ -162,12 +211,101 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    /**
+     * CloudSearchResult:
+     * java.util.List<CloudPoiInfo>
+     * poiList
+     * poi结果列表
+     * */
+    @Override
+    public void onGetSearchResult(CloudSearchResult result, int error) {
+        if (result != null && result.poiList != null && result.poiList.size() > 0) {
+            Log.d(LTAG, "onGetSearchResult, result length: " + result.poiList.size());
+
+            //清空地图所有的 Overlay 覆盖物以及 InfoWindow
+            mBaiduMap.clear();
+
+            /**
+             * public static BitmapDescriptor fromResource(int resourceId)
+             * 根据资源 Id 创建 bitmap 描述信息
+             * */
+            BitmapDescriptor bd = BitmapDescriptorFactory.fromResource(R.drawable.icon_gcoding);
+
+            LatLng ll;
+            LatLngBounds.Builder builder = new LatLngBounds.Builder();
+
+            for (CloudPoiInfo info : result.poiList) {
+                ll = new LatLng(info.latitude, info.longitude);
+                /**
+                 * OverlayOptions:地图覆盖物选型基类
+                 *
+                 * public MarkerOptions icon(BitmapDescriptor icon):
+                 * 设置 Marker 覆盖物的图标，相同图案的 icon 的 marker
+                 * 最好使用同一个 BitmapDescriptor 对象以节省内存空间。
+                 * @param icon - Marker 覆盖物的图标
+                 * @return 该 Marker 选项对象
+                 *
+                 * public MarkerOptions position(LatLng position):
+                 * 设置 marker 覆盖物的位置坐标
+                 * @param position - marker 覆盖物的位置坐标
+                 * @param 该 Marker 选项对象
+                 * */
+                OverlayOptions oo = new MarkerOptions()
+                        .icon(bd)
+                        .position(ll);
+                /**
+                 * addOverlay(OverlayOptions options):
+                 * 向地图添加一个 Overlay
+                 * */
+                mBaiduMap.addOverlay(oo);
+
+                /**
+                 * public LatLngBounds.Builder include(LatLng point)
+                 * 让该地理范围包含一个地理位置坐标
+                 * @param point - 地理位置坐标
+                 * @return 该构造器对象
+                 * */
+                builder.include(ll);
+            }
+            /**
+             * public LatLngBounds build()
+             * 创建地理范围对象
+             * @return 创建出的地理范围对象
+             * */
+            LatLngBounds bounds = builder.build();
+
+            /**
+             * MapStatusUpdateFactory:生成地图状态将要发生的变化
+             *
+             * public static MapStatusUpdate newLatLngBounds(LatLngBounds bounds)
+             * 设置显示在屏幕中的地图地理范围
+             * @param bounds - 地图显示地理范围，不能为 null
+             * @return 返回构造的 MapStatusUpdate， 如果 bounds 为 null 则返回空。
+             * */
+            MapStatusUpdate u = MapStatusUpdateFactory.newLatLngBounds(bounds);
+            mBaiduMap.animateMapStatus(u);
+        }
+    }
+
+
+    @Override
+    public void onGetDetailSearchResult(DetailSearchResult detailSearchResult, int i) {
+
+    }
+
+    @Override
+    public void onGetCloudRgcResult(CloudRgcResult cloudRgcResult, int i) {
+
+    }
+
+
     //定位的回调
     public class MyLocationListener implements BDLocationListener {
         @Override
         public void onReceiveLocation(BDLocation location) {
             mres.setText(location.getAddrStr());
             //Receive Location
+             cLoc.setCLoc(location);
             //移动到我的位置
             //设置缩放，确保屏幕内有我
             MapStatusUpdate mapUpdate = MapStatusUpdateFactory.zoomTo(16);
@@ -190,43 +328,66 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onConnectHotSpotMessage(String s, int i) {
-
+//TODO
         }
+        public BDLocation getlocation(BDLocation location){
+            return location;
+        }
+
 
     }
 
     public void getNoise(View v) {
         Toast toast = Toast.makeText(getApplicationContext(), "开始测量噪音分贝", Toast.LENGTH_SHORT);
         toast.show();
-        Intent intent = new Intent();
-        intent.setClass(MainActivity.this, NoiseMeasure.class);
-        startActivity(intent);
+        Intent mIntent = new Intent(MainActivity.this,NoiseMeasure.class);
+        mIntent.putExtra("CLoc",cLoc);
+        startActivity(mIntent);
 
     }
     //刷新页面
     public void refresh(View v){
-        finish();
-        Intent intent = new Intent();
-        intent.setClass(MainActivity.this, MainActivity.class);
-        startActivity(intent);
+        Intent mIntent = new Intent(MainActivity.this,MainActivity.class);
+        startActivity(mIntent);
+        onDestroy();
+
     }
 
+    @Override
+    protected void onStop() {
+        Log.i("y", "onStop");
+        super.onStop();
+    }
 
     @Override
     protected void onDestroy() {
+        Log.i("y", "onDestroy");
         super.onDestroy();
         mMapView.onDestroy();
+        CloudManager.getInstance().destroy();
 
     }
 
     @Override
     protected void onResume() {
+        Log.i("y", "onResume");
         super.onResume();
         mMapView.onResume();
+
+    }
+
+    @Override
+    protected void onStart() {
+        Log.i("y", "onStert");
+        super.onStart();
+
+
+
     }
 
     @Override
     protected void onPause() {
+        Log.i("y", "onPause");
         super.onPause();
         mMapView.onPause();
     }
